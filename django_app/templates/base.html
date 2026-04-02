@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <title>
+            {% block title %}
+            {% endblock %}
+        </title>
+        <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    </head>
+    <body>
+        <header>
+            <a href="{% url 'main:home' %}">Placeholder Name</a>
+            {% if user.is_authenticated %}
+                <button onclick="window.location='{% url 'users:profile' user.id %}';">
+                    Профиль
+                </button>
+                <form action="{% url 'users:logout' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit">
+                        Выйти
+                    </button>
+                </form>
+            {% else %}
+                <button onclick="window.location='{% url 'users:login' %}';">
+                    Вход
+                </button>
+                <button onclick="window.location='{% url 'users:register' %}';">
+                    Регистрация
+                </button>
+            {% endif %}
+        </header>
+
+        <main>
+            {% block content %}
+            {% endblock %}
+        </main>
+    </body>
+</html>
