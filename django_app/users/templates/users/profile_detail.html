@@ -10,7 +10,7 @@
     {{ profile.user.username }}
 
     {% if request.user == profile.user %}
-        <a href="{% url 'users:profile_edit' profile.user.id %}">Редактировать профиль</a>
+        <a href="{% url 'users:profile_update' profile.user.id %}">Редактировать профиль</a>
         <a href="{% url 'users:profile_delete' profile.user.id %}">Удалить профиль</a>
     {% endif %}
 {% endblock %}

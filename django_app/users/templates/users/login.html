@@ -13,5 +13,5 @@
         </button>
     </form>
     Нет аккаунта? <a href="{% url 'users:register' %}">Зарегистрироваться</a>
-    Забыли пароль? <a href="#">Восстановить</a>
+    Забыли пароль? <a href="{% url 'users:password_reset' %}">Восстановить</a>
 {% endblock %}
