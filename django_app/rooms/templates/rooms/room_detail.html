@@ -7,6 +7,7 @@
 {% block content %}
     <a href="{% url 'rooms:rooms_list' %}">Выйти</a>
     {{ room.name }}
+    <img src="{{ room.image.url }}" alt="image">
 
     {% if request.user == room.owner %}
         <a href="{% url 'rooms:room_update' room.id %}">Изменить</a>

@@ -5,7 +5,7 @@ from django.db.models.signals import post_save
 
 class Profile(models.Model):
     description = models.TextField('Описание', blank=True, null=True)
-    image_path = models.CharField('Аватар', blank=True, null=True, max_length=255, default='default/dealer.png')
+    image = models.ImageField('Аватар', blank=True, null=True, default='default/dealer.png', upload_to='uploads/profile/')
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name='Пользователь')
 
     class Meta:
