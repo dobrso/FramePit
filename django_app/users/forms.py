@@ -11,6 +11,12 @@ class RegisterForm(UserCreationForm):
         model = User
         fields = UserCreationForm.Meta.fields + ('email',)
 
+    def clean_email(self):
+        email = self.cleaned_data['email']
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError("Пользователь с такой почтой уже существует!")
+        return email
+
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = Profile

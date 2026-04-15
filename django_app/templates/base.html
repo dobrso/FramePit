@@ -8,14 +8,13 @@
             {% endblock %}
         </title>
         <link rel="stylesheet" href="{% static 'css/style.css' %}">
+        <link rel="shortcut icon" type="image/png" href="{% static 'default/dealer.png' %}">
     </head>
     <body>
         <header>
             <a href="{% url 'main:home' %}">Frame Pit</a>
             {% if user.is_authenticated %}
-                <button onclick="window.location='{% url 'users:profile_detail' user.id %}';">
-                    Профиль
-                </button>
+                <a href="{% url 'users:profile_detail' user.id %}">Профиль</a>
                 <form action="{% url 'users:logout' %}" method="post">
                     {% csrf_token %}
                     <button type="submit">
@@ -23,12 +22,8 @@
                     </button>
                 </form>
             {% else %}
-                <button onclick="window.location='{% url 'users:login' %}';">
-                    Вход
-                </button>
-                <button onclick="window.location='{% url 'users:register' %}';">
-                    Регистрация
-                </button>
+                <a href="{% url 'users:login' %}">Вход</a>
+                <a href="{% url 'users:register' %}">Регистрация</a>
             {% endif %}
         </header>
 
