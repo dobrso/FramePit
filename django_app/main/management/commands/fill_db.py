@@ -50,7 +50,7 @@ class Command(BaseCommand):
     def _create_rooms(self, users, tags):
         for i in range(10):
             user = choice(users)
-            name = f'Комната {user.username}'
+            name = f'Комната {user.username}_{i+1}'
 
             room, _ = Room.objects.get_or_create(name=name, owner=user)
             room.tags.add(choice(tags))
