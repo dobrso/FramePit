@@ -14,7 +14,7 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_DB: framepit_test
+          POSTGRES_DB: framepit_test_db
           POSTGRES_USER: framepit_admin
           POSTGRES_PASSWORD: framepit_admin_password
         ports:
@@ -55,5 +55,6 @@ jobs:
         env:
           PYTHONPATH: django_app
           DJANGO_SETTINGS_MODULE: django_app.settings
+          DB_NAME: framepit_test_db
         run: |
           poetry run pytest
