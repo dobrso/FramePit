@@ -55,6 +55,5 @@ jobs:
         env:
           PYTHONPATH: django_app
           DJANGO_SETTINGS_MODULE: django_app.settings
-          DB_NAME: framepit_test_db
         run: |
           poetry run pytest
