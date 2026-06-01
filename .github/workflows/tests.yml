@@ -53,6 +53,7 @@ jobs:
 
       - name: Run tests
         env:
+          PYTHONPATH: django_app
           DJANGO_SETTINGS_MODULE: django_app.settings
         run: |
           poetry run pytest
