@@ -61,6 +61,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -122,7 +123,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [('localhost', 6379)],
+            'hosts': [(os.getenv('REDIS_HOST', 'localhost'), 6379)],
         }
     }
 }
@@ -208,4 +209,8 @@ SPECTACULAR_SETTINGS = {
 }
 
 SITE_ID = 1
+GITHUB_CLIENT_ID = os.getenv('GITHUB_CLIENT_ID')
+GITHUB_CLIENT_SECRET = os.getenv('GITHUB_CLIENT_SECRET')
+YANDEX_CLIENT_ID = os.getenv('YANDEX_CLIENT_ID')
+YANDEX_CLIENT_SECRET = os.getenv('YANDEX_CLIENT_SECRET')
 SOCIALACCOUNT_LOGIN_ON_GET = True

@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: framepit_db
+      POSTGRES_USER: framepit_admin
+      POSTGRES_PASSWORD: framepit_admin_password
+    ports:
+      - '5432:5432'
+
+  redis:
+    image: redis:7
+    ports:
+      - '6379:6379'
+
+  web:
+    build:
+      context: .
+      dockerfile: django_app/Dockerfile
+    command: bash -c 'poetry run python manage.py migrate && poetry run python manage.py fill_db && poetry run daphne -b 0.0.0.0 -p 8000 django_app.asgi:application'
+    ports:
+      - '8000:8000'
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - django_app/django_app/.env
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=framepit_db
+      - DB_USER=framepit_admin
+      - DB_PASSWORD=framepit_admin_password
+      - DB_PORT=5432
+      - REDIS_HOST=redis

@@ -2,17 +2,31 @@ from random import choice
 
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+from django.conf import settings
+from django.contrib.sites.models import Site
+from allauth.socialaccount.models import SocialApp
 
 from users.models import Profile
 from rooms.models import Tag, Room
 
 class Command(BaseCommand):
     def handle(self, *args, **options):
+        self._create_site()
         users = self._create_users()
         tags = self._create_tags()
         self._create_rooms(users, tags)
+        self._create_providers()
 
         self.stdout.write('БД заполнена данными')
+
+    def _create_site(self):
+        Site.objects.get_or_create(
+            id=settings.SITE_ID,
+            defaults={
+                'domain': 'localhost:8000',
+                'name': 'localhost',
+            }
+        )
 
     def _create_users(self):
         User = get_user_model()
@@ -57,3 +71,32 @@ class Command(BaseCommand):
             room.members.add(user)
 
         self.stdout.write('Созданы комнаты')
+
+    def _create_providers(self):
+        site = Site.objects.get_current()
+
+        github_app, created = SocialApp.objects.get_or_create(
+            provider='github',
+            defaults={
+                'name': 'GitHub',
+                'client_id': settings.GITHUB_CLIENT_ID,
+                'secret': settings.GITHUB_CLIENT_SECRET,
+            }
+        )
+
+        if created:
+            github_app.sites.add(site)
+            github_app.save()
+
+        yandex_app, created = SocialApp.objects.get_or_create(
+            provider='yandex',
+            defaults={
+                'name': 'Yandex',
+                'client_id': settings.YANDEX_CLIENT_ID,
+                'secret': settings.YANDEX_CLIENT_SECRET,
+            }
+        )
+
+        if created:
+            yandex_app.sites.add(site)
+            yandex_app.save()
