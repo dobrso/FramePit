@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}
     Комната {{ room.name }}
@@ -50,17 +51,10 @@
                 <div class="chat-header">
                     <h5 class="chat-title">ЧАТ</h5>
                 </div>
-                <div class="chat-messages">
-                    <div class="message-center">
-                        <p class="message-placeholder">В разработке<br>Ожидаем Django Channels</p>
-                        <div class="loading-dots">
-                            <span>.</span><span>.</span><span>.</span>
-                        </div>
-                    </div>
-                </div>
+                <div id="chat-messages" class="chat-messages"></div>
                 <div class="chat-input-container">
-                    <input type="text" class="chat-input" placeholder="Введите сообщение..." disabled>
-                    <button class="chat-send-btn" disabled>ОТПРАВИТЬ</button>
+                    <input type="text" id="chat-input" class="chat-input" placeholder="Введите сообщение...">
+                    <button id="chat-send-btn" class="chat-send-btn">ОТПРАВИТЬ</button>
                 </div>
             </div>
         </div>
@@ -69,18 +63,394 @@
             <div class="video-card">
                 <div class="video-header">
                     <h5 class="video-title">СМОТРЕТЬ</h5>
+                    <div class="video-controls">
+                        <input type="text" id="youtube-url-input" class="chat-input" placeholder="YouTube URL...">
+                        <button id="load-video-btn" class="chat-send-btn">ЗАГРУЗИТЬ</button>
+                    </div>
                 </div>
                 <div class="video-container">
-                    <div class="video-placeholder">
-                        <div class="placeholder-animation">
-                            <span class="placeholder-icon">💀</span>
-                        </div>
-                        <p class="placeholder-text">В разработке</p>
-                        <p class="placeholder-sub">Ожидаем Django Channels</p>
-                    </div>
+                    <div id="player"></div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+    // Навайбкоженый джаваскрипт
+    let websocket;
+    let player;
+    let isSeeking = false;
+    let ignoreNextSeek = false;
+    let pendingSync = false;
+    let isInitialSync = true;
+    const roomId = '{{ room.id }}';
+
+    function extractYouTubeId(url) {
+        if (!url) return null;
+
+        if (url.length === 11 && !url.includes('/') && !url.includes('.')) {
+            return url;
+        }
+
+        const patterns = [
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?#]+)/,
+            /youtube\.com\/watch\?.*v=([^&]+)/,
+            /youtu\.be\/([^?]+)/
+        ];
+
+        for (let pattern of patterns) {
+            const match = url.match(pattern);
+            if (match) return match[1];
+        }
+
+        return null;
+    }
+
+    function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+            height: '100%',
+            width: '100%',
+            videoId: '',
+            playerVars: {
+                'autoplay': 0,
+                'controls': 1,
+                'rel': 0,
+                'enablejsapi': 1,
+                'modestbranding': 1
+            },
+            events: {
+                'onStateChange': onPlayerStateChange,
+                'onReady': onPlayerReady,
+                'onError': onPlayerError
+            }
+        });
+    }
+
+    function onPlayerReady(event) {
+        console.log('Player ready');
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify({
+                'type': 'request_state'
+            }));
+        }
+    }
+
+    function onPlayerError(event) {
+        console.error('Player error:', event.data);
+        addChatMessage('Ошибка загрузки видео', true);
+    }
+
+    let ignoreNextStateChange = false;
+    let lastSyncTime = 0;
+
+    function onPlayerStateChange(event) {
+        if (ignoreNextStateChange) {
+            ignoreNextStateChange = false;
+            return;
+        }
+
+        if (isInitialSync) {
+            return;
+        }
+
+        const currentTime = player.getCurrentTime();
+        const currentState = event.data;
+
+        const now = Date.now();
+        if (now - lastSyncTime < 200) {
+            return;
+        }
+        lastSyncTime = now;
+
+        switch (currentState) {
+            case YT.PlayerState.PLAYING:
+                console.log('Sending play event at:', currentTime);
+                websocket.send(JSON.stringify({
+                    'type': 'video_play',
+                    'current_time': currentTime
+                }));
+                break;
+            case YT.PlayerState.PAUSED:
+                console.log('Sending pause event at:', currentTime);
+                websocket.send(JSON.stringify({
+                    'type': 'video_pause',
+                    'current_time': currentTime
+                }));
+                break;
+            case YT.PlayerState.BUFFERING:
+                break;
+        }
+    }
+
+    function handleWebsocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        websocket = new WebSocket(`${protocol}://${window.location.host}/ws/room/${roomId}/`);
+
+        websocket.onopen = function() {
+            console.log('WebSocket connected');
+            addChatMessage('Подключен к комнате', true);
+
+            if (player && player.getPlayerState) {
+                websocket.send(JSON.stringify({
+                    'type': 'request_state'
+                }));
+            }
+        };
+
+        websocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            handleWebsocketMessage(data);
+        };
+
+        websocket.onclose = function() {
+            console.log('WebSocket disconnected. Reconnecting...');
+            addChatMessage('Отключен от комнаты. Переподключение...', true);
+            setTimeout(handleWebsocket, 5000);
+        };
+
+        websocket.onerror = function(error) {
+            console.error('WebSocket error:', error);
+            addChatMessage('Ошибка соединения', true);
+        };
+    }
+
+    function handleWebsocketMessage(data) {
+        switch (data.type) {
+            case 'chat_message':
+                addChatMessage(data.message, false);
+                break;
+            case 'video_action':
+                handleVideoAction(data);
+                break;
+            case 'video_state':
+                handleVideoState(data);
+                break;
+            case 'sync_complete':
+                isInitialSync = false;
+                console.log('Initial sync complete');
+                break;
+        }
+    }
+
+    function handleVideoState(data) {
+        if (!player || typeof player.loadVideoById !== 'function') {
+            console.log('Player not ready yet, queueing state');
+            setTimeout(() => handleVideoState(data), 500);
+            return;
+        }
+
+        const videoId = data.video_id;
+        const isPlaying = data.is_playing;
+        const currentTime = parseFloat(data.current_time) || 0;
+
+        console.log('Received video state:', { videoId, isPlaying, currentTime });
+
+        if (videoId && videoId !== player.getVideoData().video_id) {
+            isInitialSync = true;
+
+            player.loadVideoById({
+                videoId: videoId,
+                startSeconds: currentTime
+            });
+
+            const checkAndSync = setInterval(() => {
+                const playerState = player.getPlayerState();
+                if (playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.PAUSED) {
+                    clearInterval(checkAndSync);
+
+                    ignoreNextStateChange = true;
+
+                    if (Math.abs(player.getCurrentTime() - currentTime) > 0.5) {
+                        player.seekTo(currentTime, true);
+                    }
+
+                    if (isPlaying && playerState !== YT.PlayerState.PLAYING) {
+                        player.playVideo();
+                    } else if (!isPlaying && playerState === YT.PlayerState.PLAYING) {
+                        player.pauseVideo();
+                    }
+
+                    setTimeout(() => {
+                        isInitialSync = false;
+                    }, 1000);
+                }
+            }, 100);
+        } else if (videoId && videoId === player.getVideoData().video_id) {
+            isInitialSync = true;
+
+            ignoreNextStateChange = true;
+
+            if (Math.abs(player.getCurrentTime() - currentTime) > 0.5) {
+                player.seekTo(currentTime, true);
+            }
+
+            setTimeout(() => {
+                if (isPlaying && player.getPlayerState() !== YT.PlayerState.PLAYING) {
+                    player.playVideo();
+                } else if (!isPlaying && player.getPlayerState() === YT.PlayerState.PLAYING) {
+                    player.pauseVideo();
+                }
+
+                setTimeout(() => {
+                    isInitialSync = false;
+                }, 500);
+            }, 100);
+        }
+    }
+
+    function handleVideoAction(data) {
+        if (!player || typeof player.getPlayerState !== 'function') return;
+
+        const action = data.action;
+        const username = data.username;
+
+        if (isInitialSync && username === '{{ request.user.username }}') {
+            return;
+        }
+
+        switch (action) {
+            case 'load':
+                if (data.video_id) {
+                    const currentVideoId = player.getVideoData().video_id;
+                    if (currentVideoId !== data.video_id) {
+                        console.log('Loading video:', data.video_id);
+                        isInitialSync = true;
+                        player.loadVideoById(data.video_id);
+                        addChatMessage(`${username} загрузил новое видео`, true);
+                        setTimeout(() => {
+                            isInitialSync = false;
+                        }, 1000);
+                    }
+                }
+                break;
+
+            case 'play':
+                const playerState = player.getPlayerState();
+                if (playerState !== YT.PlayerState.PLAYING && !isInitialSync) {
+                    ignoreNextStateChange = true;
+                    if (data.current_time) {
+                        const currentTime = player.getCurrentTime();
+                        if (Math.abs(currentTime - data.current_time) > 0.5) {
+                            player.seekTo(data.current_time, true);
+                        }
+                    }
+                    setTimeout(() => {
+                        player.playVideo();
+                    }, 50);
+                }
+                break;
+
+            case 'pause':
+                const currentState = player.getPlayerState();
+                if (currentState === YT.PlayerState.PLAYING && !isInitialSync) {
+                    if (data.current_time) {
+                        const currentTime = player.getCurrentTime();
+                        if (Math.abs(currentTime - data.current_time) > 0.5) {
+                            player.seekTo(data.current_time, true);
+                        }
+                    }
+                    setTimeout(() => {
+                        player.pauseVideo();
+                    }, 50);
+                }
+                break;
+
+            case 'seek':
+                if (!isInitialSync && data.current_time) {
+                    const seekTime = data.current_time;
+                    if (Math.abs(player.getCurrentTime() - seekTime) > 0.3) {
+                        ignoreNextStateChange = true;
+                        player.seekTo(seekTime, true);
+                    }
+                }
+                break;
+        }
+    }
+
+    function addChatMessage(message, isSystem = false) {
+        const chatLog = document.querySelector('#chat-messages');
+        if (!chatLog) return;
+
+        const messageElement = document.createElement('div');
+
+        if (isSystem) {
+            messageElement.className = 'system-message';
+            messageElement.innerHTML = message;
+        } else {
+            messageElement.innerHTML = message;
+        }
+
+        chatLog.appendChild(messageElement);
+        chatLog.scrollTop = chatLog.scrollHeight;
+
+        while (chatLog.children.length > 200) {
+            chatLog.removeChild(chatLog.firstChild);
+        }
+    }
+
+    document.querySelector('#chat-send-btn').onclick = function() {
+        const messageInputDom = document.querySelector('#chat-input');
+        const message = messageInputDom.value.trim();
+
+        if (message && websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify({
+                'type': 'chat_message',
+                'message': message
+            }));
+            messageInputDom.value = '';
+        } else if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+            addChatMessage('❌ Нет подключения к серверу', true);
+        }
+    };
+
+    document.querySelector('#chat-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.querySelector('#chat-send-btn').click();
+        }
+    });
+
+    document.querySelector('#load-video-btn').onclick = function() {
+        const urlInput = document.querySelector('#youtube-url-input');
+        const videoUrl = urlInput.value.trim();
+        const videoId = extractYouTubeId(videoUrl);
+
+        if (videoId && websocket && websocket.readyState === WebSocket.OPEN) {
+            console.log('Loading video:', videoId);
+            websocket.send(JSON.stringify({
+                'type': 'video_load',
+                'video_id': videoId
+            }));
+            urlInput.value = '';
+            addChatMessage(`Загрузка видео...`, true);
+        } else if (!videoId) {
+            addChatMessage('❌ Неверная ссылка YouTube', true);
+        } else if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+            addChatMessage('❌ Нет подключения к серверу', true);
+        }
+    };
+
+    document.querySelector('#youtube-url-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.querySelector('#load-video-btn').click();
+        }
+    });
+
+    window.addEventListener('beforeunload', function() {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.close();
+        }
+    });
+
+    window.onload = function() {
+        handleWebsocket();
+    };
+</script>
 {% endblock %}
